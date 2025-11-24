@@ -248,12 +248,13 @@ void LinuxPatch() {
     RegCloseKey(hKey);
     
     // Check if running on macOS with Wine/CrossOver
-    // macOS Wine sets HOME to /Users/username, Linux Wine sets it to /home/username
+    // On macOS, Wine sets HOME to /Users/username (vs /home/username on Linux)
+    // Note: This detection assumes standard HOME paths; custom configurations may differ
     const char* home = getenv("HOME");
     if (home != nullptr) {
         std::string homePath(home);
         // Check if HOME starts with /Users (macOS) instead of /home (Linux)
-        if (homePath.find("/Users/") == 0 || homePath.find("/Users") == 0) {
+        if (homePath.compare(0, 7, "/Users/") == 0) {
             info("Wine/CrossOver on macOS detected! Skipping Linux-specific patches.");
             info("macOS Wine/CrossOver works best without the Linux patches.");
             return;

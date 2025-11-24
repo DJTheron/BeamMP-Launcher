@@ -150,33 +150,7 @@ void URelaunch() {
     std::this_thread::sleep_for(std::chrono::seconds(1));
     exit(1);
 }
-#elif defined(__linux__)
-void ReLaunch() {
-    std::string Arg;
-    for (int c = 2; c <= options.argc; c++) {
-        Arg += options.argv[c - 1];
-        Arg += " ";
-    }
-    info("Relaunch!");
-    system("clear");
-    int ret = execv((GetBP() / GetEN()).c_str(), const_cast<char**>(options.argv));
-    if (ret < 0) {
-        error(std::string("execv() failed with: ") + strerror(errno) + ". Failed to relaunch");
-        exit(1);
-    }
-    std::this_thread::sleep_for(std::chrono::seconds(1));
-    exit(1);
-}
-void URelaunch() {
-    int ret = execv((GetBP() / GetEN()).c_str(), const_cast<char**>(options.argv));
-    if (ret < 0) {
-        error(std::string("execv() failed with: ") + strerror(errno) + ". Failed to relaunch");
-        exit(1);
-    }
-    std::this_thread::sleep_for(std::chrono::seconds(1));
-    exit(1);
-}
-#elif defined(__APPLE__)
+#elif defined(__linux__) || defined(__APPLE__)
 void ReLaunch() {
     std::string Arg;
     for (int c = 2; c <= options.argc; c++) {

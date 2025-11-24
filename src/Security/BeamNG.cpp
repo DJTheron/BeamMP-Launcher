@@ -294,13 +294,12 @@ void LegitimacyCheck() {
         // Check for BeamNG bottle
         homeDir / "Library/Application Support/CrossOver/Bottles/BeamNG/drive_c/Program Files (x86)/Steam/steamapps",
         homeDir / "Library/Application Support/CrossOver/Bottles/BeamNG/drive_c/Program Files/Steam/steamapps",
-        // Whisky (Wine fork)
-        homeDir / "Library/Containers/com.isaacmarovitz.Whisky/Bottles/*/drive_c/Program Files (x86)/Steam/steamapps",
-        homeDir / "Library/Containers/com.isaacmarovitz.Whisky/Bottles/*/drive_c/Program Files/Steam/steamapps",
     };
 
     bool gameDirFound = false;
-    for (const auto& steamPath : macSteamPaths) {
+    
+    // Helper lambda to check a steam path
+    auto checkSteamPath = [&](const std::filesystem::path& steamPath) {
         if (std::filesystem::exists(steamPath)) {
             // Check in main steamapps
             auto gamePathDirect = steamPath / "common/BeamNG.drive/integrity.json";
@@ -308,7 +307,7 @@ void LegitimacyCheck() {
                 GameDir = steamPath / "common/BeamNG.drive/";
                 gameDirFound = true;
                 info("Found BeamNG.drive in: " + GameDir.string());
-                break;
+                return true;
             }
             
             // Check libraryfolders.vdf for additional game locations
@@ -322,10 +321,43 @@ void LegitimacyCheck() {
                         GameDir = path + "/steamapps/common/BeamNG.drive/";
                         gameDirFound = true;
                         info("Found BeamNG.drive in library folder: " + GameDir.string());
-                        break;
+                        return true;
                     }
                 }
-                if (gameDirFound) break;
+            }
+        }
+        return false;
+    };
+    
+    // Check standard paths
+    for (const auto& steamPath : macSteamPaths) {
+        if (checkSteamPath(steamPath)) {
+            break;
+        }
+    }
+    
+    // Check Whisky bottles if not found yet
+    if (!gameDirFound) {
+        auto whiskyBottlesPath = homeDir / "Library/Containers/com.isaacmarovitz.Whisky/Bottles";
+        if (std::filesystem::exists(whiskyBottlesPath)) {
+            try {
+                for (const auto& bottleEntry : std::filesystem::directory_iterator(whiskyBottlesPath)) {
+                    if (bottleEntry.is_directory()) {
+                        // Check both Program Files locations
+                        std::vector<std::filesystem::path> whiskyPaths = {
+                            bottleEntry.path() / "drive_c/Program Files (x86)/Steam/steamapps",
+                            bottleEntry.path() / "drive_c/Program Files/Steam/steamapps",
+                        };
+                        for (const auto& whiskyPath : whiskyPaths) {
+                            if (checkSteamPath(whiskyPath)) {
+                                break;
+                            }
+                        }
+                        if (gameDirFound) break;
+                    }
+                }
+            } catch (const std::filesystem::filesystem_error& e) {
+                debug("Error iterating Whisky bottles: " + std::string(e.what()));
             }
         }
     }

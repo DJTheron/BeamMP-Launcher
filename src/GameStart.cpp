@@ -304,6 +304,8 @@ void StartGame(std::string Dir) {
     info("Launching with: " + wineExecutable + " " + filename);
     int result = posix_spawn(&pid, wineExecutable.c_str(), &spawn_actions, nullptr, const_cast<char**>(argv.data()), environ);
     
+    posix_spawn_file_actions_destroy(&spawn_actions);
+    
     if (result != 0) {
         error("Failed to Launch the game! launcher closing soon");
         error("Make sure Wine or CrossOver is installed and accessible.");

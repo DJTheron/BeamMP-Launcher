@@ -246,8 +246,23 @@ void LinuxPatch() {
     if (result != ERROR_SUCCESS || getenv("USER") == nullptr)
         return;
     RegCloseKey(hKey);
+    
+    // Check if running on macOS with Wine/CrossOver
+    // On macOS, Wine sets HOME to /Users/username (vs /home/username on Linux)
+    // Note: This detection assumes standard HOME paths; custom configurations may differ
+    const char* home = getenv("HOME");
+    if (home != nullptr) {
+        std::string homePath(home);
+        // Check if HOME starts with /Users (macOS) instead of /home (Linux)
+        if (homePath.compare(0, 7, "/Users/") == 0) {
+            info("Wine/CrossOver on macOS detected! Skipping Linux-specific patches.");
+            info("macOS Wine/CrossOver works best without the Linux patches.");
+            return;
+        }
+    }
+    
     info("Wine/Proton Detected! If you are on windows delete HKEY_CURRENT_USER\\Software\\Wine in regedit");
-    info("Applying patches...");
+    info("Applying Linux-specific patches...");
 
     result = RegCreateKey(HKEY_CURRENT_USER, R"(Software\Valve\Steam\Apps\284160)", &hKey);
 

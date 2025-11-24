@@ -78,7 +78,7 @@ Version::Version(const std::array<uint8_t, 3>& v)
 beammp_fs_string GetEN() {
 #if defined(_WIN32)
     return L"BeamMP-Launcher.exe";
-#elif defined(__linux__)
+#elif defined(__linux__) || defined(__APPLE__)
     return "BeamMP-Launcher";
 #endif
 }
@@ -176,12 +176,38 @@ void URelaunch() {
     std::this_thread::sleep_for(std::chrono::seconds(1));
     exit(1);
 }
+#elif defined(__APPLE__)
+void ReLaunch() {
+    std::string Arg;
+    for (int c = 2; c <= options.argc; c++) {
+        Arg += options.argv[c - 1];
+        Arg += " ";
+    }
+    info("Relaunch!");
+    system("clear");
+    int ret = execv((GetBP() / GetEN()).c_str(), const_cast<char**>(options.argv));
+    if (ret < 0) {
+        error(std::string("execv() failed with: ") + strerror(errno) + ". Failed to relaunch");
+        exit(1);
+    }
+    std::this_thread::sleep_for(std::chrono::seconds(1));
+    exit(1);
+}
+void URelaunch() {
+    int ret = execv((GetBP() / GetEN()).c_str(), const_cast<char**>(options.argv));
+    if (ret < 0) {
+        error(std::string("execv() failed with: ") + strerror(errno) + ". Failed to relaunch");
+        exit(1);
+    }
+    std::this_thread::sleep_for(std::chrono::seconds(1));
+    exit(1);
+}
 #endif
 
 void CheckName() {
 #if defined(_WIN32)
     std::wstring DN = GetEN(), CDir = Utils::ToWString(options.executable_name), FN = CDir.substr(CDir.find_last_of('\\') + 1);
-#elif defined(__linux__)
+#elif defined(__linux__) || defined(__APPLE__)
     std::string DN = GetEN(), CDir = options.executable_name, FN = CDir.substr(CDir.find_last_of('/') + 1);
 #endif
     if (FN != DN) {
@@ -288,6 +314,15 @@ void InitLauncher() {
     CheckLocalKey();
     CheckForUpdates(std::string(GetVer()) + GetPatch());
 }
+#elif defined(__APPLE__)
+
+void InitLauncher() {
+    info("BeamMP Launcher v" + GetVer() + GetPatch() + " (macOS/Wine)");
+    info("Running on macOS with Wine/CrossOver support");
+    CheckName();
+    CheckLocalKey();
+    CheckForUpdates(std::string(GetVer()) + GetPatch());
+}
 #endif
 
 size_t DirCount(const fs::path& path) {
@@ -367,8 +402,9 @@ void PreGame(const beammp_fs_string& GamePath) {
         }
 #if defined(_WIN32)
         std::wstring ZipPath(GetGamePath() / LR"(mods\multiplayer\BeamMP.zip)");
-#elif defined(__linux__)
+#elif defined(__linux__) || defined(__APPLE__)
         // Linux version of the game cant handle mods with uppercase names
+        // Same applies for macOS with Wine/CrossOver
         std::string ZipPath(GetGamePath() / R"(mods/multiplayer/beammp.zip)");
 #endif
 

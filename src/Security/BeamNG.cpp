@@ -8,7 +8,7 @@
 #include <filesystem>
 #if defined(_WIN32)
 #include <shlobj_core.h>
-#elif defined(__linux__)
+#elif defined(__linux__) || defined(__APPLE__)
 #include "vdf_parser.hpp"
 #include <pwd.h>
 #include <unistd.h>
@@ -276,6 +276,63 @@ void LegitimacyCheck() {
     }
     if (GameDir.empty()) {
         error("The game directory was not found.");
+        return;
+    }
+#elif defined(__APPLE__)
+    // macOS support for Wine/CrossOver
+    struct passwd* pw = getpwuid(getuid());
+    std::filesystem::path homeDir = pw->pw_dir;
+
+    // Check for CrossOver or Wine installations
+    std::vector<std::filesystem::path> macSteamPaths = {
+        // Standard Wine prefix
+        homeDir / ".wine/drive_c/Program Files (x86)/Steam/steamapps",
+        homeDir / ".wine/drive_c/Program Files/Steam/steamapps",
+        // CrossOver bottles (common locations)
+        homeDir / "Library/Application Support/CrossOver/Bottles/Steam/drive_c/Program Files (x86)/Steam/steamapps",
+        homeDir / "Library/Application Support/CrossOver/Bottles/Steam/drive_c/Program Files/Steam/steamapps",
+        // Check for BeamNG bottle
+        homeDir / "Library/Application Support/CrossOver/Bottles/BeamNG/drive_c/Program Files (x86)/Steam/steamapps",
+        homeDir / "Library/Application Support/CrossOver/Bottles/BeamNG/drive_c/Program Files/Steam/steamapps",
+        // Whisky (Wine fork)
+        homeDir / "Library/Containers/com.isaacmarovitz.Whisky/Bottles/*/drive_c/Program Files (x86)/Steam/steamapps",
+        homeDir / "Library/Containers/com.isaacmarovitz.Whisky/Bottles/*/drive_c/Program Files/Steam/steamapps",
+    };
+
+    bool gameDirFound = false;
+    for (const auto& steamPath : macSteamPaths) {
+        if (std::filesystem::exists(steamPath)) {
+            // Check in main steamapps
+            auto gamePathDirect = steamPath / "common/BeamNG.drive/integrity.json";
+            if (std::filesystem::exists(gamePathDirect)) {
+                GameDir = steamPath / "common/BeamNG.drive/";
+                gameDirFound = true;
+                info("Found BeamNG.drive in: " + GameDir.string());
+                break;
+            }
+            
+            // Check libraryfolders.vdf for additional game locations
+            auto libraryFoldersPath = steamPath / "libraryfolders.vdf";
+            if (std::filesystem::exists(libraryFoldersPath)) {
+                std::ifstream libraryFolders(libraryFoldersPath);
+                auto root = tyti::vdf::read(libraryFolders);
+                for (auto folderInfo : root.childs) {
+                    std::string path = folderInfo.second->attribs["path"];
+                    if (std::filesystem::exists(path + "/steamapps/common/BeamNG.drive/integrity.json")) {
+                        GameDir = path + "/steamapps/common/BeamNG.drive/";
+                        gameDirFound = true;
+                        info("Found BeamNG.drive in library folder: " + GameDir.string());
+                        break;
+                    }
+                }
+                if (gameDirFound) break;
+            }
+        }
+    }
+
+    if (!gameDirFound) {
+        error("The game directory was not found on macOS. Please ensure BeamNG.drive is installed via Steam in Wine/CrossOver.");
+        error("Searched paths include Wine prefix and CrossOver bottles.");
         return;
     }
 #endif

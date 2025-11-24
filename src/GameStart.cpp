@@ -6,7 +6,7 @@
 
 #if defined(_WIN32)
 #include <shlobj.h>
-#elif defined(__linux__) || defined(__APPLE__)
+#elif defined(__linux__)
 #include "vdf_parser.hpp"
 #include <pwd.h>
 #include <spawn.h>
@@ -128,48 +128,6 @@ std::filesystem::path GetGamePath() {
     Path += "current/";
     return Path;
 }
-#elif defined(__APPLE__)
-std::filesystem::path GetGamePath() {
-    // macOS with Wine/CrossOver support
-    struct passwd* pw = getpwuid(getuid());
-    std::string homeDir = pw->pw_dir;
-
-    // Try multiple possible user data locations for Wine/CrossOver
-    std::vector<std::string> possiblePaths = {
-        // Wine prefix - Windows path mapping
-        homeDir + "/.wine/drive_c/users/" + pw->pw_name + "/Local Settings/Application Data/BeamNG/BeamNG.drive/",
-        homeDir + "/.wine/drive_c/users/" + pw->pw_name + "/AppData/Local/BeamNG/BeamNG.drive/",
-        // CrossOver bottles
-        homeDir + "/Library/Application Support/CrossOver/Bottles/Steam/drive_c/users/crossover/Local Settings/Application Data/BeamNG/BeamNG.drive/",
-        homeDir + "/Library/Application Support/CrossOver/Bottles/Steam/drive_c/users/crossover/AppData/Local/BeamNG/BeamNG.drive/",
-        homeDir + "/Library/Application Support/CrossOver/Bottles/BeamNG/drive_c/users/crossover/Local Settings/Application Data/BeamNG/BeamNG.drive/",
-        homeDir + "/Library/Application Support/CrossOver/Bottles/BeamNG/drive_c/users/crossover/AppData/Local/BeamNG/BeamNG.drive/",
-        // Whisky
-        homeDir + "/Library/Containers/com.isaacmarovitz.Whisky/Bottles/BeamNG/drive_c/users/crossover/AppData/Local/BeamNG/BeamNG.drive/",
-        // Fallback to local share (native macOS path if ever needed)
-        homeDir + "/.local/share/BeamNG/BeamNG.drive/",
-    };
-
-    std::string Path;
-    for (const auto& possiblePath : possiblePaths) {
-        if (std::filesystem::exists(possiblePath)) {
-            Path = possiblePath;
-            info("Found BeamNG user path: " + Path);
-            break;
-        }
-    }
-
-    if (Path.empty()) {
-        // If no path found, create a default one based on Wine structure
-        Path = homeDir + "/.wine/drive_c/users/" + pw->pw_name + "/Local Settings/Application Data/BeamNG/BeamNG.drive/";
-        warn("Could not find existing BeamNG user path, using default: " + Path);
-    }
-
-    std::string Ver = CheckVer(GetGameDir());
-    Ver = Ver.substr(0, Ver.find('.', Ver.find('.') + 1));
-    Path += "current/";
-    return Path;
-}
 #endif
 
 #if defined(_WIN32)
@@ -241,83 +199,6 @@ void StartGame(std::string Dir) {
         error("Game Closed! launcher closing soon");
     }
 
-    std::this_thread::sleep_for(std::chrono::seconds(5));
-    exit(2);
-}
-#elif defined(__APPLE__)
-void StartGame(std::string Dir) {
-    // macOS with Wine/CrossOver support
-    // On macOS, we need to launch through Wine/CrossOver
-    info("Starting BeamNG.drive on macOS via Wine/CrossOver...");
-    
-    int status;
-    std::string filename = (Dir + "/Bin64/BeamNG.drive.x64.exe");
-    
-    // Check if file exists first
-    if (!std::filesystem::exists(filename)) {
-        // Try alternative path
-        filename = (Dir + "/BeamNG.drive.exe");
-        if (!std::filesystem::exists(filename)) {
-            error("Could not find BeamNG.drive executable in: " + Dir);
-            std::this_thread::sleep_for(std::chrono::seconds(5));
-            exit(2);
-        }
-    }
-    
-    std::vector<const char*> argv;
-    
-    // Try to detect Wine/CrossOver and use appropriate launcher
-    std::vector<std::string> winePaths = {
-        "/usr/local/bin/wine64",
-        "/usr/local/bin/wine",
-        "/opt/homebrew/bin/wine64",
-        "/opt/homebrew/bin/wine",
-    };
-    
-    std::string wineExecutable;
-    for (const auto& path : winePaths) {
-        if (std::filesystem::exists(path)) {
-            wineExecutable = path;
-            break;
-        }
-    }
-    
-    if (wineExecutable.empty()) {
-        // Try using system wine
-        wineExecutable = "wine64";
-    }
-    
-    argv.push_back(wineExecutable.data());
-    argv.push_back(filename.data());
-    
-    for (int i = 0; i < options.game_arguments_length; i++) {
-        argv.push_back(options.game_arguments[i]);
-    }
-    argv.push_back(nullptr);
-    
-    pid_t pid;
-    posix_spawn_file_actions_t spawn_actions;
-    posix_spawn_file_actions_init(&spawn_actions);
-    posix_spawn_file_actions_addclose(&spawn_actions, STDOUT_FILENO);
-    posix_spawn_file_actions_addclose(&spawn_actions, STDERR_FILENO);
-    
-    info("Launching with: " + wineExecutable + " " + filename);
-    int result = posix_spawn(&pid, wineExecutable.c_str(), &spawn_actions, nullptr, const_cast<char**>(argv.data()), environ);
-    
-    posix_spawn_file_actions_destroy(&spawn_actions);
-    
-    if (result != 0) {
-        error("Failed to Launch the game! launcher closing soon");
-        error("Make sure Wine or CrossOver is installed and accessible.");
-        std::this_thread::sleep_for(std::chrono::seconds(5));
-        return;
-    } else {
-        info("Game Launched!");
-        GamePID = pid;
-        waitpid(pid, &status, 0);
-        error("Game Closed! launcher closing soon");
-    }
-    
     std::this_thread::sleep_for(std::chrono::seconds(5));
     exit(2);
 }

@@ -78,7 +78,7 @@ Version::Version(const std::array<uint8_t, 3>& v)
 beammp_fs_string GetEN() {
 #if defined(_WIN32)
     return L"BeamMP-Launcher.exe";
-#elif defined(__linux__) || defined(__APPLE__)
+#elif defined(__linux__)
     return "BeamMP-Launcher";
 #endif
 }
@@ -150,7 +150,7 @@ void URelaunch() {
     std::this_thread::sleep_for(std::chrono::seconds(1));
     exit(1);
 }
-#elif defined(__linux__) || defined(__APPLE__)
+#elif defined(__linux__)
 void ReLaunch() {
     std::string Arg;
     for (int c = 2; c <= options.argc; c++) {
@@ -181,7 +181,7 @@ void URelaunch() {
 void CheckName() {
 #if defined(_WIN32)
     std::wstring DN = GetEN(), CDir = Utils::ToWString(options.executable_name), FN = CDir.substr(CDir.find_last_of('\\') + 1);
-#elif defined(__linux__) || defined(__APPLE__)
+#elif defined(__linux__)
     std::string DN = GetEN(), CDir = options.executable_name, FN = CDir.substr(CDir.find_last_of('/') + 1);
 #endif
     if (FN != DN) {
@@ -246,8 +246,22 @@ void LinuxPatch() {
     if (result != ERROR_SUCCESS || getenv("USER") == nullptr)
         return;
     RegCloseKey(hKey);
+    
+    // Check if running on macOS with Wine/CrossOver
+    // macOS Wine sets HOME to /Users/username, Linux Wine sets it to /home/username
+    const char* home = getenv("HOME");
+    if (home != nullptr) {
+        std::string homePath(home);
+        // Check if HOME starts with /Users (macOS) instead of /home (Linux)
+        if (homePath.find("/Users/") == 0 || homePath.find("/Users") == 0) {
+            info("Wine/CrossOver on macOS detected! Skipping Linux-specific patches.");
+            info("macOS Wine/CrossOver works best without the Linux patches.");
+            return;
+        }
+    }
+    
     info("Wine/Proton Detected! If you are on windows delete HKEY_CURRENT_USER\\Software\\Wine in regedit");
-    info("Applying patches...");
+    info("Applying Linux-specific patches...");
 
     result = RegCreateKey(HKEY_CURRENT_USER, R"(Software\Valve\Steam\Apps\284160)", &hKey);
 
@@ -284,15 +298,6 @@ void InitLauncher() {
 
 void InitLauncher() {
     info("BeamMP Launcher v" + GetVer() + GetPatch());
-    CheckName();
-    CheckLocalKey();
-    CheckForUpdates(std::string(GetVer()) + GetPatch());
-}
-#elif defined(__APPLE__)
-
-void InitLauncher() {
-    info("BeamMP Launcher v" + GetVer() + GetPatch() + " (macOS/Wine)");
-    info("Running on macOS with Wine/CrossOver support");
     CheckName();
     CheckLocalKey();
     CheckForUpdates(std::string(GetVer()) + GetPatch());
@@ -376,9 +381,8 @@ void PreGame(const beammp_fs_string& GamePath) {
         }
 #if defined(_WIN32)
         std::wstring ZipPath(GetGamePath() / LR"(mods\multiplayer\BeamMP.zip)");
-#elif defined(__linux__) || defined(__APPLE__)
+#elif defined(__linux__)
         // Linux version of the game cant handle mods with uppercase names
-        // Same applies for macOS with Wine/CrossOver
         std::string ZipPath(GetGamePath() / R"(mods/multiplayer/beammp.zip)");
 #endif
 
